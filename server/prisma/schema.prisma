@@ -1,0 +1,163 @@
+// AI Learning Buddy Prisma Schema
+// Dual-compatible with PostgreSQL (production) and SQLite (zero-config local dev)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String           @id @default(uuid())
+  email        String           @unique
+  name         String
+  passwordHash String
+  role         String           @default("USER")
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  courses      Course[]
+  progress     LessonProgress[]
+  quizAttempts QuizAttempt[]
+  chatMessages ChatMessage[]
+
+  @@map("users")
+}
+
+model Course {
+  id                String    @id @default(uuid())
+  userId            String
+  title             String
+  description       String
+  topic             String
+  skillLevel        String    // "Beginner" | "Intermediate" | "Advanced"
+  durationDays      Int
+  dailyStudyMinutes Int
+  learningGoal      String?
+  learningObjectives String   // JSON array of strings
+  prerequisites     String?   // JSON array of strings
+  finalProject      String?   // JSON object with title, description, tasks
+  status            String    @default("completed") // "generating" | "completed" | "failed"
+  generationError   String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  modules           Module[]
+
+  @@index([userId])
+  @@map("courses")
+}
+
+model Module {
+  id          String   @id @default(uuid())
+  courseId    String
+  order       Int
+  title       String
+  description String
+  createdAt   DateTime @default(now())
+
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+
+  @@index([courseId])
+  @@map("modules")
+}
+
+model Lesson {
+  id                 String           @id @default(uuid())
+  moduleId           String
+  order              Int
+  title              String
+  learningObjectives String           // JSON array of strings
+  estimatedMinutes   Int
+  content            String?          // Full markdown/structured educational content
+  isGenerated        Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  module             Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  progress           LessonProgress[]
+  quizzes            Quiz[]
+  chatMessages       ChatMessage[]
+
+  @@index([moduleId])
+  @@map("lessons")
+}
+
+model LessonProgress {
+  id             String    @id @default(uuid())
+  userId         String
+  lessonId       String
+  isCompleted    Boolean   @default(false)
+  completedAt    DateTime?
+  lastAccessedAt DateTime  @default(now())
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson         Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+  @@index([lessonId])
+  @@map("lesson_progress")
+}
+
+model Quiz {
+  id        String        @id @default(uuid())
+  lessonId  String
+  title     String
+  questions String        // JSON array of { id, questionText, options: string[], correctAnswerIndex: number, explanation: string, questionType: string }
+  createdAt DateTime      @default(now())
+
+  lesson    Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  attempts  QuizAttempt[]
+
+  @@index([lessonId])
+  @@map("quizzes")
+}
+
+model QuizAttempt {
+  id             String   @id @default(uuid())
+  quizId         String
+  userId         String
+  score          Int
+  totalQuestions Int
+  userAnswers    String   // JSON array of { questionIndex: number, selectedOptionIndex: number, isCorrect: boolean }
+  passed         Boolean  @default(false)
+  completedAt    DateTime @default(now())
+
+  quiz           Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([quizId])
+  @@index([userId])
+  @@map("quiz_attempts")
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  lessonId  String
+  userId    String
+  role      String   // "user" | "assistant" | "system"
+  content   String
+  createdAt DateTime @default(now())
+
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId, userId])
+  @@map("chat_messages")
+}
+
+model YouTubeVideoCache {
+  id           String   @id @default(uuid())
+  searchQuery  String   @unique
+  videosJson   String   // JSON array of { videoId, title, channelTitle, thumbnailUrl, url }
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("youtube_video_caches")
+}
